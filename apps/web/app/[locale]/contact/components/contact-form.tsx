@@ -1,31 +1,23 @@
 'use client';
 
-import { Button } from '@repo/design-system/components/ui/button';
-import { Calendar } from '@repo/design-system/components/ui/calendar';
-import { Input } from '@repo/design-system/components/ui/input';
-import { Label } from '@repo/design-system/components/ui/label';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@repo/design-system/components/ui/popover';
-import { cn } from '@repo/design-system/lib/utils';
+// Removed unused imports: Button, Calendar, Input, Label, Popover, PopoverContent, PopoverTrigger, cn, format, CalendarIcon, MoveRight
+// Kept: Check (used in benefits section)
+import { Check } from 'lucide-react';
 import type { Dictionary } from '@repo/internationalization';
-import { format } from 'date-fns';
-import { CalendarIcon, Check, MoveRight } from 'lucide-react';
-import { useState } from 'react';
+// Removed: useState (no longer needed for date)
 
 type ContactFormProps = {
   dictionary: Dictionary;
 };
 
 export const ContactForm = ({ dictionary }: ContactFormProps) => {
-  const [date, setDate] = useState<Date | undefined>(new Date());
+  // Removed: const [date, setDate] = useState<Date | undefined>(new Date());
 
   return (
     <div className="w-full py-20 lg:py-40">
       <div className="container mx-auto max-w-6xl">
         <div className="grid gap-10 lg:grid-cols-2">
+          {/* Left column with general contact info - remains the same */}
           <div className="flex flex-col gap-6">
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-2">
@@ -53,64 +45,21 @@ export const ContactForm = ({ dictionary }: ContactFormProps) => {
             ))}
           </div>
 
-          <div className="flex items-center justify-center">
-            <div className="flex max-w-sm flex-col gap-4 rounded-md border p-8">
-              <p>{dictionary.web.contact.hero.form.title}</p>
-              <div className="grid w-full max-w-sm items-center gap-1">
-                <Label htmlFor="picture">
-                  {dictionary.web.contact.hero.form.date}
-                </Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        'w-full max-w-sm justify-start text-left font-normal',
-                        !date && 'text-muted-foreground'
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {date ? (
-                        format(date, 'PPP')
-                      ) : (
-                        <span>{dictionary.web.contact.hero.form.date}</span>
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar
-                      mode="single"
-                      selected={date}
-                      onSelect={setDate}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-              <div className="grid w-full max-w-sm items-center gap-1">
-                <Label htmlFor="firstname">
-                  {dictionary.web.contact.hero.form.firstName}
-                </Label>
-                <Input id="firstname" type="text" />
-              </div>
-              <div className="grid w-full max-w-sm items-center gap-1">
-                <Label htmlFor="lastname">
-                  {dictionary.web.contact.hero.form.lastName}
-                </Label>
-                <Input id="lastname" type="text" />
-              </div>
-              <div className="grid w-full max-w-sm items-center gap-1">
-                <Label htmlFor="picture">
-                  {dictionary.web.contact.hero.form.resume}
-                </Label>
-                <Input id="picture" type="file" />
-              </div>
-
-              <Button className="w-full gap-4">
-                {dictionary.web.contact.hero.form.cta}{' '}
-                <MoveRight className="h-4 w-4" />
-              </Button>
-            </div>
+          {/* Right column - replacing the form with a message */}
+          <div className="flex flex-col items-center justify-center rounded-md border p-8">
+            <h5 className="text-xl font-semibold mb-4">
+              {dictionary.web.contact.hero.form.title || "Get in Touch"} {/* Using existing title or a fallback */}
+            </h5>
+            <p className="text-center text-lg text-muted-foreground leading-relaxed tracking-tight">
+              {/* You might want to add a specific dictionary entry for this message */}
+              If you'd like to contact us, please send an email to:
+            </p>
+            <p className="text-center text-lg font-semibold text-primary mt-2">
+              contact@example.com
+            </p>
+            <p className="text-center text-sm text-muted-foreground mt-4">
+              (Please note: This is a dummy address for demonstration purposes.)
+            </p>
           </div>
         </div>
       </div>
