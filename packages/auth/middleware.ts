@@ -1,1 +1,1 @@
-export { clerkMiddleware as authMiddleware } from '@clerk/nextjs/server';
+export { withMiddlewareAuthRequired } from '@auth0/nextjs-auth0/edge';

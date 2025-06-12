@@ -1,233 +1,125 @@
-import { env } from '@/env';
+import { env } from '@/env'; // Ensure env includes AUTH0_WEBHOOK_SECRET
 import { analytics } from '@repo/analytics/posthog/server';
-import type {
-  DeletedObjectJSON,
-  OrganizationJSON,
-  OrganizationMembershipJSON,
-  UserJSON,
-  WebhookEvent,
-} from '@repo/auth/server';
 import { log } from '@repo/observability/log';
 import { headers } from 'next/headers';
 import { NextResponse } from 'next/server';
-import { Webhook } from 'svix';
 
-const handleUserCreated = (data: UserJSON) => {
-  analytics.identify({
-    distinctId: data.id,
-    properties: {
-      email: data.email_addresses.at(0)?.email_address,
-      firstName: data.first_name,
-      lastName: data.last_name,
-      createdAt: new Date(data.created_at),
-      avatar: data.image_url,
-      phoneNumber: data.phone_numbers.at(0)?.phone_number,
-    },
-  });
+// Define a generic type for Auth0 user data for now.
+// This will need to be refined based on the actual Auth0 event payloads.
+interface Auth0User {
+  user_id: string;
+  email?: string;
+  name?: string; // Auth0 might send name, given_name, family_name
+  picture?: string;
+  // Add other relevant fields based on Auth0's user profile
+}
 
-  analytics.capture({
-    event: 'User Created',
-    distinctId: data.id,
-  });
+interface Auth0Organization {
+  id: string;
+  name?: string;
+  // Add other relevant fields
+}
 
-  return new Response('User created', { status: 201 });
-};
+interface Auth0Event {
+  type: string; // e.g., 'sapi_user_created', 'sapi_user_updated', 'sapi_user_deleted'
+  user?: Auth0User;
+  organization?: Auth0Organization;
+  // Other event-specific data
+  [key: string]: any; // Allow other properties
+}
 
-const handleUserUpdated = (data: UserJSON) => {
-  analytics.identify({
-    distinctId: data.id,
-    properties: {
-      email: data.email_addresses.at(0)?.email_address,
-      firstName: data.first_name,
-      lastName: data.last_name,
-      createdAt: new Date(data.created_at),
-      avatar: data.image_url,
-      phoneNumber: data.phone_numbers.at(0)?.phone_number,
-    },
-  });
+// Simplified event handler for now
+const handleEvent = (event: Auth0Event) => {
+  log.info('Auth0 Webhook Event Received:', { type: event.type, data: event });
 
-  analytics.capture({
-    event: 'User Updated',
-    distinctId: data.id,
-  });
+  // Example: User created event (adjust type based on actual Auth0 event type)
+  // Auth0 user event types are typically like:
+  // - Pre User Registration: 'pre-user-registration'
+  // - Post User Registration: 'post-user-registration' (good for user created)
+  // - Post Change Password: 'post-change-password'
+  // - User Login: 's', 'fu', 'fua' (success, failed, failed user action)
+  // - User Management API events: 'sapi_user_created', 'sapi_user_updated', 'sapi_user_deleted'
+  // We will assume Management API events for now as they are more explicit for CRUD.
 
-  return new Response('User updated', { status: 201 });
-};
+  const user = event.user;
+  const organization = event.organization; // Auth0 uses 'organizations' add-on
 
-const handleUserDeleted = (data: DeletedObjectJSON) => {
-  if (data.id) {
+  if (user) {
     analytics.identify({
-      distinctId: data.id,
+      distinctId: user.user_id,
       properties: {
-        deleted: new Date(),
+        email: user.email,
+        name: user.name, // Or construct from given_name, family_name
+        avatar: user.picture,
+        // Map other relevant user properties from Auth0
       },
     });
-
-    analytics.capture({
-      event: 'User Deleted',
-      distinctId: data.id,
-    });
   }
 
-  return new Response('User deleted', { status: 201 });
-};
-
-const handleOrganizationCreated = (data: OrganizationJSON) => {
-  analytics.groupIdentify({
-    groupKey: data.id,
-    groupType: 'company',
-    distinctId: data.created_by,
-    properties: {
-      name: data.name,
-      avatar: data.image_url,
-    },
-  });
-
-  if (data.created_by) {
-    analytics.capture({
-      event: 'Organization Created',
-      distinctId: data.created_by,
-    });
-  }
-
-  return new Response('Organization created', { status: 201 });
-};
-
-const handleOrganizationUpdated = (data: OrganizationJSON) => {
-  analytics.groupIdentify({
-    groupKey: data.id,
-    groupType: 'company',
-    distinctId: data.created_by,
-    properties: {
-      name: data.name,
-      avatar: data.image_url,
-    },
-  });
-
-  if (data.created_by) {
-    analytics.capture({
-      event: 'Organization Updated',
-      distinctId: data.created_by,
-    });
-  }
-
-  return new Response('Organization updated', { status: 201 });
-};
-
-const handleOrganizationMembershipCreated = (
-  data: OrganizationMembershipJSON
-) => {
-  analytics.groupIdentify({
-    groupKey: data.organization.id,
-    groupType: 'company',
-    distinctId: data.public_user_data.user_id,
-  });
-
+  // Basic event capture
   analytics.capture({
-    event: 'Organization Member Created',
-    distinctId: data.public_user_data.user_id,
+    event: event.type, // Use Auth0 event type directly or map it
+    distinctId: user?.user_id || 'system', // Fallback for non-user events
+    properties: event, // Send the whole event data for now
   });
 
-  return new Response('Organization membership created', { status: 201 });
-};
+  // Organization handling would require Auth0's Organizations feature
+  // and corresponding webhook events.
+  if (organization && user) { // Assuming user context for organization event
+     analytics.groupIdentify({
+        groupKey: organization.id,
+        groupType: 'company', // Or your preferred group type
+        distinctId: user.user_id, // User associated with this org event
+        properties: {
+          name: organization.name,
+          // map other org properties
+        },
+    });
+  }
 
-const handleOrganizationMembershipDeleted = (
-  data: OrganizationMembershipJSON
-) => {
-  // Need to unlink the user from the group
 
-  analytics.capture({
-    event: 'Organization Member Deleted',
-    distinctId: data.public_user_data.user_id,
-  });
-
-  return new Response('Organization membership deleted', { status: 201 });
+  return new Response(\`Event \${event.type} handled\`, { status: 200 });
 };
 
 export const POST = async (request: Request): Promise<Response> => {
-  if (!env.CLERK_WEBHOOK_SECRET) {
-    return NextResponse.json({ message: 'Not configured', ok: false });
+  if (!env.AUTH0_WEBHOOK_SECRET) {
+    log.warn('Auth0 webhook secret is not configured.');
+    return NextResponse.json({ message: 'Auth0 webhook secret not configured', ok: false }, { status: 503 });
   }
 
-  // Get the headers
-  const headerPayload = await headers();
-  const svixId = headerPayload.get('svix-id');
-  const svixTimestamp = headerPayload.get('svix-timestamp');
-  const svixSignature = headerPayload.get('svix-signature');
+  const headerPayload = headers();
+  const authorizationToken = headerPayload.get('authorization');
 
-  // If there are no headers, error out
-  if (!svixId || !svixTimestamp || !svixSignature) {
-    return new Response('Error occured -- no svix headers', {
-      status: 400,
-    });
+  // Verify the secret token
+  // Auth0 sends the secret in an 'authorization' header, e.g., "Bearer YOUR_SECRET"
+  // Or you can configure a custom header. Standard practice is Authorization.
+  if (!authorizationToken || authorizationToken !== \`Bearer \${env.AUTH0_WEBHOOK_SECRET}\`) {
+    log.warn('Auth0 webhook unauthorized access attempt.');
+    return new Response('Unauthorized', { status: 401 });
   }
 
-  // Get the body
-  const payload = (await request.json()) as object;
-  const body = JSON.stringify(payload);
-
-  // Create a new SVIX instance with your secret.
-  const webhook = new Webhook(env.CLERK_WEBHOOK_SECRET);
-
-  let event: WebhookEvent | undefined;
-
-  // Verify the payload with the headers
+  let eventPayload: Auth0Event;
   try {
-    event = webhook.verify(body, {
-      'svix-id': svixId,
-      'svix-timestamp': svixTimestamp,
-      'svix-signature': svixSignature,
-    }) as WebhookEvent;
+    eventPayload = await request.json();
   } catch (error) {
-    log.error('Error verifying webhook:', { error });
-    return new Response('Error occured', {
-      status: 400,
-    });
+    log.error('Error parsing Auth0 webhook payload:', { error });
+    return new Response('Invalid payload', { status: 400 });
   }
 
-  // Get the ID and type
-  const { id } = event.data;
-  const eventType = event.type;
-
-  log.info('Webhook', { id, eventType, body });
-
-  let response: Response = new Response('', { status: 201 });
-
-  switch (eventType) {
-    case 'user.created': {
-      response = handleUserCreated(event.data);
-      break;
-    }
-    case 'user.updated': {
-      response = handleUserUpdated(event.data);
-      break;
-    }
-    case 'user.deleted': {
-      response = handleUserDeleted(event.data);
-      break;
-    }
-    case 'organization.created': {
-      response = handleOrganizationCreated(event.data);
-      break;
-    }
-    case 'organization.updated': {
-      response = handleOrganizationUpdated(event.data);
-      break;
-    }
-    case 'organizationMembership.created': {
-      response = handleOrganizationMembershipCreated(event.data);
-      break;
-    }
-    case 'organizationMembership.deleted': {
-      response = handleOrganizationMembershipDeleted(event.data);
-      break;
-    }
-    default: {
-      break;
-    }
+  // Ensure payload is an array of events (some Auth0 webhooks send batches) or a single event
+  // For simplicity, this example assumes a single event structure.
+  // If Auth0 sends batches, you'll need to iterate through them.
+  // Check Auth0 documentation for the specific webhook type you're using.
+  // For example, some logs stream events in an array.
+  if (Array.isArray(eventPayload)) {
+      for (const event of eventPayload) {
+          handleEvent(event as Auth0Event); // Process each event
+      }
+      await analytics.shutdown();
+      return new Response('Events handled', { status: 200 });
+  } else {
+      const response = handleEvent(eventPayload as Auth0Event);
+      await analytics.shutdown();
+      return response;
   }
-
-  await analytics.shutdown();
-
-  return response;
 };
